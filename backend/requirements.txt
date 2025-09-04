@@ -1,0 +1,9 @@
+fastapi[standard]
+pydantic-settings
+sqlalchemy
+pytest
+httpx
+python-cas
+mysqlclient
+python-cas
+itsdangerous

@@ -1,0 +1,1 @@
+Let's start working on the frontend. First thing's first, it is a necessity that the frontend will make API calls to the backend. So we will need to create a .env file obviously store store API key & API URL. Then we need to create routes, such as stud

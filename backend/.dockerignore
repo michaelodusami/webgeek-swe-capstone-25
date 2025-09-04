@@ -1,0 +1,6 @@
+run.sh
+.venv/
+.cursor/
+.env
+.gitignore
+README.md

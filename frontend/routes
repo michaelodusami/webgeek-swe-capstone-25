@@ -1,0 +1,443 @@
+from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from src.config.base import Base
+
+# Pydantic Models
+class UserCourseCreate(BaseModel):
+    user_id: int
+    course_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class UserCourseResponse(BaseModel):
+    id: Optional[int] = None
+    user_id: int
+    course_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class UserCourse(Base):
+    __tablename__ = "user_courses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="user_courses")
+    course = relationship("Course", back_populates="user_courses") 
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
+from src.model.skill import SkillCreate, SkillResponse
+from src.services.skill_service import SkillService
+from src.dependencies.dependencies import get_skill_service
+from typing import List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/skills", tags=["skills"])
+
+@router.post("/", status_code=201)
+def create_skill(
+    skill: SkillCreate,
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """Create a new skill."""
+    try:
+        created_skill = skill_service.create_skill(skill)
+        return JSONResponse(
+            status_code=201,
+            content={"success": True, "data": SkillResponse.model_validate(created_skill).model_dump(mode='json'), "error": None}
+        )
+    except ValueError as e:
+        logger.error(f"Skill creation failed: {e}")
+        return JSONResponse(
+            status_code=409,
+            content={"success": False, "data": None, "error": str(e)}
+        )
+
+@router.post("/bulk", status_code=201)
+def create_multiple_skills(
+    skills: List[SkillCreate],
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """Create multiple skills at once."""
+    created_skills = []
+    errors = []
+    
+    for i, skill_data in enumerate(skills):
+        try:
+            created_skill = skill_service.create_skill(skill_data)
+            created_skills.append(SkillResponse.model_validate(created_skill).model_dump(mode='json'))
+        except ValueError as e:
+            error_msg = f"Skill {i+1} ({skill_data.name}): {str(e)}"
+            errors.append(error_msg)
+            logger.error(error_msg)
+    
+    if errors:
+        return JSONResponse(
+            status_code=207,  # Multi-Status
+            content={
+                "success": True,
+                "data": {
+                    "created_skills": created_skills,
+                    "errors": errors,
+                    "total_requested": len(skills),
+                    "successfully_created": len(created_skills),
+                    "failed": len(errors)
+                },
+                "error": None
+            }
+        )
+    
+    return JSONResponse(
+        status_code=201,
+        content={
+            "success": True,
+            "data": {
+                "created_skills": created_skills,
+                "total_created": len(created_skills)
+            },
+            "error": None
+        }
+    )
+
+@router.get("/")
+def list_skills(
+    skip: int = Query(0, ge=0, description="Number of skills to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of skills to return"),
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """List all skills with pagination."""
+    skills = skill_service.list_skills(skip=skip, limit=limit)
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": [SkillResponse.model_validate(s).model_dump(mode='json') for s in skills], "error": None}
+    )
+
+@router.get("/count")
+def get_skills_count(skill_service: SkillService = Depends(get_skill_service)):
+    """Get the total number of skills."""
+    count = skill_service.get_skills_count()
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": {"total_skills": count}, "error": None}
+    )
+
+@router.get("/search")
+def search_skills(
+    q: str = Query(..., description="Search term for skill name"),
+    skip: int = Query(0, ge=0, description="Number of skills to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of skills to return"),
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """Search skills by name."""
+    skills = skill_service.search_skills(search_term=q, skip=skip, limit=limit)
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": [SkillResponse.model_validate(s).model_dump(mode='json') for s in skills], "error": None}
+    )
+
+@router.get("/multi-select")
+def get_skills_for_multi_select(
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """Get all skills formatted for multi-select components."""
+    skills = skill_service.list_skills(skip=0, limit=1000)  # Get all skills for multi-select
+    
+    # Format skills for multi-select
+    formatted_skills = []
+    for skill in skills:
+        skill_dict = skill.model_dump(mode='json')
+        formatted_skill = {
+            "value": skill_dict["id"],
+            "label": skill_dict["name"],
+            "display": skill_dict["name"]
+        }
+        formatted_skills.append(formatted_skill)
+    
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "skills": formatted_skills,
+                "total": len(formatted_skills)
+            },
+            "error": None
+        }
+    )
+
+@router.get("/{skill_id}")
+def get_skill(
+    skill_id: int,
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """Retrieve a skill by ID."""
+    skill = skill_service.get_skill_by_id(skill_id)
+    if not skill:
+        logger.warning(f"Skill with ID {skill_id} not found")
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "data": None, "error": "Skill not found"}
+        )
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": SkillResponse.model_validate(skill).model_dump(mode='json'), "error": None}
+    )
+
+@router.put("/{skill_id}")
+def update_skill(
+    skill_id: int,
+    skill: SkillCreate,
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """Update an existing skill by ID."""
+    try:
+        updated_skill = skill_service.update_skill(skill_id, skill)
+        if not updated_skill:
+            logger.warning(f"Skill with ID {skill_id} not found for update")
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "data": None, "error": "Skill not found"}
+            )
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "data": SkillResponse.model_validate(updated_skill).model_dump(mode='json'), "error": None}
+        )
+    except ValueError as e:
+        logger.error(f"Update failed for skill {skill_id}: {e}")
+        return JSONResponse(
+            status_code=409,
+            content={"success": False, "data": None, "error": str(e)}
+        )
+
+@router.delete("/{skill_id}")
+def delete_skill(
+    skill_id: int,
+    skill_service: SkillService = Depends(get_skill_service)
+):
+    """Delete a skill by ID."""
+    try:
+        deleted = skill_service.delete_skill(skill_id)
+        if not deleted:
+            logger.warning(f"Skill with ID {skill_id} not found for deletion")
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "data": None, "error": "Skill not found"}
+            )
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "data": {"message": f"Skill with ID {skill_id} deleted successfully"}, "error": None}
+        )
+    except ValueError as e:
+        logger.error(f"Deletion failed for skill {skill_id}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "data": None, "error": str(e)}
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
+from src.model.user_skill import UserSkillCreate, UserSkillResponse
+from src.services.user_skill_service import UserSkillService
+from src.dependencies.dependencies import get_user_skill_service
+from typing import List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/user-skills", tags=["user-skills"])
+
+@router.post("/", status_code=201)
+def create_user_skill(
+    user_skill: UserSkillCreate,
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Create a new user-skill relationship."""
+    try:
+        created_user_skill = user_skill_service.create_user_skill(user_skill)
+        return JSONResponse(
+            status_code=201,
+            content={"success": True, "data": UserSkillResponse.model_validate(created_user_skill).model_dump(mode='json'), "error": None}
+        )
+    except ValueError as e:
+        logger.error(f"User-skill relationship creation failed: {e}")
+        return JSONResponse(
+            status_code=409,
+            content={"success": False, "data": None, "error": str(e)}
+        )
+
+@router.get("/")
+def list_user_skills(
+    skip: int = Query(0, ge=0, description="Number of user-skill relationships to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of user-skill relationships to return"),
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """List all user-skill relationships with pagination."""
+    user_skills = user_skill_service.list_user_skills(skip=skip, limit=limit)
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": [UserSkillResponse.model_validate(us).model_dump(mode='json') for us in user_skills], "error": None}
+    )
+
+@router.get("/count")
+def get_user_skills_count(user_skill_service: UserSkillService = Depends(get_user_skill_service)):
+    """Get the total number of user-skill relationships."""
+    count = user_skill_service.get_user_skills_count()
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": {"total_user_skills": count}, "error": None}
+    )
+
+@router.get("/by-user/{user_id}")
+def get_user_skills_by_user(
+    user_id: int,
+    skip: int = Query(0, ge=0, description="Number of user-skill relationships to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of user-skill relationships to return"),
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Get all user-skill relationships for a specific user."""
+    user_skills = user_skill_service.get_user_skills_by_user(user_id=user_id, skip=skip, limit=limit)
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": [UserSkillResponse.model_validate(us).model_dump(mode='json') for us in user_skills], "error": None}
+    )
+
+@router.get("/by-skill/{skill_id}")
+def get_user_skills_by_skill(
+    skill_id: int,
+    skip: int = Query(0, ge=0, description="Number of user-skill relationships to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of user-skill relationships to return"),
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Get all user-skill relationships for a specific skill."""
+    user_skills = user_skill_service.get_user_skills_by_skill(skill_id=skill_id, skip=skip, limit=limit)
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": [UserSkillResponse.model_validate(us).model_dump(mode='json') for us in user_skills], "error": None}
+    )
+
+@router.get("/count/by-user/{user_id}")
+def get_user_skills_count_by_user(
+    user_id: int,
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Get the total number of user-skill relationships for a specific user."""
+    count = user_skill_service.get_user_skills_count_by_user(user_id=user_id)
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": {"total_user_skills": count}, "error": None}
+    )
+
+@router.get("/count/by-skill/{skill_id}")
+def get_user_skills_count_by_skill(
+    skill_id: int,
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Get the total number of user-skill relationships for a specific skill."""
+    count = user_skill_service.get_user_skills_count_by_skill(skill_id=skill_id)
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": {"total_user_skills": count}, "error": None}
+    )
+
+@router.get("/{user_skill_id}")
+def get_user_skill(
+    user_skill_id: int,
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Retrieve a user-skill relationship by ID."""
+    user_skill = user_skill_service.get_user_skill_by_id(user_skill_id)
+    if not user_skill:
+        logger.warning(f"User-skill relationship with ID {user_skill_id} not found")
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "data": None, "error": "User-skill relationship not found"}
+        )
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "data": UserSkillResponse.model_validate(user_skill).model_dump(mode='json'), "error": None}
+    )
+
+@router.put("/{user_skill_id}")
+def update_user_skill(
+    user_skill_id: int,
+    user_skill: UserSkillCreate,
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Update an existing user-skill relationship by ID."""
+    try:
+        updated_user_skill = user_skill_service.update_user_skill(user_skill_id, user_skill)
+        if not updated_user_skill:
+            logger.warning(f"User-skill relationship with ID {user_skill_id} not found for update")
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "data": None, "error": "User-skill relationship not found"}
+            )
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "data": UserSkillResponse.model_validate(updated_user_skill).model_dump(mode='json'), "error": None}
+        )
+    except ValueError as e:
+        logger.error(f"Update failed for user-skill relationship {user_skill_id}: {e}")
+        return JSONResponse(
+            status_code=409,
+            content={"success": False, "data": None, "error": str(e)}
+        )
+
+@router.delete("/{user_skill_id}")
+def delete_user_skill(
+    user_skill_id: int,
+    user_skill_service: UserSkillService = Depends(get_user_skill_service)
+):
+    """Delete a user-skill relationship by ID."""
+    try:
+        deleted = user_skill_service.delete_user_skill(user_skill_id)
+        if not deleted:
+            logger.warning(f"User-skill relationship with ID {user_skill_id} not found for deletion")
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "data": None, "error": "User-skill relationship not found"}
+            )
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "data": {"message": f"User-skill relationship with ID {user_skill_id} deleted successfully"}, "error": None}
+        )
+    except ValueError as e:
+        logger.error(f"Deletion failed for user-skill relationship {user_skill_id}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "data": None, "error": str(e)}
+        ) 
+
+        from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from src.config.base import Base
+
+# Pydantic Models
+class ProjectSkillCreate(BaseModel):
+    project_id: int
+    skill_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class ProjectSkillResponse(BaseModel):
+    id: Optional[int] = None
+    project_id: int
+    skill_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class ProjectSkill(Base):
+    __tablename__ = "project_skills"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill_id = Column(Integer, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Relationships
+    project = relationship("Project", back_populates="project_skills")
+    skill = relationship("Skill", back_populates="project_skills") 

@@ -1,0 +1,2 @@
+docker build --platform=linux/amd64 -t container.cs.vt.edu/modusami03/webgeek-cs3704-summer25/frontend:v0.0 .
+docker push --platform=linux/amd64 container.cs.vt.edu/modusami03/webgeek-cs3704-summer25/frontend:v0.0

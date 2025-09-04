@@ -1,0 +1,24 @@
+we will do:
+semesters
+courses
+skills - md logos
+project_skills
+project_users
+user_courses
+user_skills
+
+---
+project_preferences 
+id INT PRIMARY KEY
+user_id INT
+project_id INT
+rank varchar(50) CHECK (rank BETWEEN 1 AND 3),
+FOREIGN KEY (user_id) REFERENCES users(id),
+FOREIGN KEY (project_id) REFERENCES projects(id)
+
+user_preferences (rank)
+id INT PRIMARY KEY
+user_id INT          -- The student making the choice
+preferred_user_id INT  -- The student they want to work with
+FOREIGN KEY (user_id) REFERENCES users(id),
+FOREIGN KEY (preferred_user_id) REFERENCES users(id)

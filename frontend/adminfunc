@@ -1,0 +1,4 @@
+Looking at your database structure and the existing codebase, here are the admin capabilities that should be available on the settings page:
+
+[STUDENT] Assign skills to users (user-skill relationships)
+

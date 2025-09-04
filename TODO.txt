@@ -1,0 +1,11 @@
+TODO.txt
+
+- [DONE] Implement CAS Authentication on the backend
+- [ DONE ] Secure the api endpoints using an APIKEY
+- [ DONE ] Refactor the entire frontend by:
+    - [ DONE ] understanding how dev v prod works and how to seperate the two 
+    - [ DONE ] changing the .env variables
+    - [ DONE ] removing non implemented routes and focusing on the users for simplicaity
+    - [ DONE ] implementing CAS Authentication on the frontend 
+- [ ] Design additional API endpoints based on project requirements
+- [ ] Implement admin functionality 

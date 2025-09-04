@@ -1,0 +1,324 @@
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.sql import func
+from sqlalchemy.ext.declarative import declarative_base
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from datetime import datetime
+from src.config.base import Base
+from sqlalchemy.orm import relationship
+
+# Pydantic Models
+class UserCreate(BaseModel):
+    username: str
+    edupersonprimaryaffiliation: str
+    uupid: str
+    edupersonprincipalname: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class UserResponse(BaseModel):
+    id: Optional[int] = None
+    username: str
+    edupersonprimaryaffiliation: str
+    uupid: str
+    edupersonprincipalname: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(255), nullable=False, unique=True)
+    edupersonprimaryaffiliation = Column(String(255), nullable=False)
+    uupid = Column(String(255), nullable=False, unique=True)
+    edupersonprincipalname = Column(String(255), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    project_users = relationship("ProjectUser", back_populates="user")
+    user_courses = relationship("UserCourse", back_populates="user")
+    user_skills = relationship("UserSkill", back_populates="user")
+
+from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from src.config.base import Base
+
+# Pydantic Models
+class UserSkillCreate(BaseModel):
+    user_id: int
+    skill_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class UserSkillResponse(BaseModel):
+    id: Optional[int] = None
+    user_id: int
+    skill_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class UserSkill(Base):
+    __tablename__ = "user_skills"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill_id = Column(Integer, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="user_skills")
+    skill = relationship("Skill", back_populates="user_skills") 
+
+from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from src.config.base import Base
+
+# Pydantic Models
+class UserCourseCreate(BaseModel):
+    user_id: int
+    course_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class UserCourseResponse(BaseModel):
+    id: Optional[int] = None
+    user_id: int
+    course_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class UserCourse(Base):
+    __tablename__ = "user_courses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="user_courses")
+    course = relationship("Course", back_populates="user_courses") 
+
+    from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from src.config.base import Base
+
+# Pydantic Models
+class SkillCreate(BaseModel):
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+class SkillResponse(BaseModel):
+    id: Optional[int] = None
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class Skill(Base):
+    __tablename__ = "skills"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False)
+
+    # Relationships
+    project_skills = relationship("ProjectSkill", back_populates="skill")
+    user_skills = relationship("UserSkill", back_populates="skill") 
+
+
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from datetime import datetime
+from src.config.base import Base
+
+# Pydantic Models
+class SemesterCreate(BaseModel):
+    displayName: str
+    semesterStartDate: datetime
+    semesterEndDate: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SemesterResponse(BaseModel):
+    id: Optional[int] = None
+    displayName: str
+    semesterStartDate: datetime
+    semesterEndDate: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class Semester(Base):
+    __tablename__ = "semesters"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    displayName = Column(String(255), nullable=False)
+    semesterStartDate = Column(DateTime(timezone=True), nullable=False)
+    semesterEndDate = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship
+    courses = relationship("Course", back_populates="semester") 
+
+
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from datetime import datetime
+from src.config.base import Base
+
+# Pydantic Models
+class ProjectCreate(BaseModel):
+    course_id: Optional[int] = None
+    title: str
+    description: str
+    maxCapacity: int
+    teamName: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProjectResponse(BaseModel):
+    id: Optional[int] = None
+    course_id: Optional[int] = None
+    title: str
+    description: str
+    maxCapacity: int
+    teamName: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    maxCapacity = Column(Integer, nullable=False, default=4)
+    teamName = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship
+    course = relationship("Course", back_populates="projects")
+    project_skills = relationship("ProjectSkill", back_populates="project")
+    project_users = relationship("ProjectUser", back_populates="project") 
+
+    from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from src.config.base import Base
+
+# Pydantic Models
+class ProjectUserCreate(BaseModel):
+    project_id: int
+    user_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class ProjectUserResponse(BaseModel):
+    id: Optional[int] = None
+    project_id: int
+    user_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class ProjectUser(Base):
+    __tablename__ = "project_users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Relationships
+    project = relationship("Project", back_populates="project_users")
+    user = relationship("User", back_populates="project_users") 
+
+    from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from src.config.base import Base
+
+# Pydantic Models
+class ProjectSkillCreate(BaseModel):
+    project_id: int
+    skill_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class ProjectSkillResponse(BaseModel):
+    id: Optional[int] = None
+    project_id: int
+    skill_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class ProjectSkill(Base):
+    __tablename__ = "project_skills"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill_id = Column(Integer, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Relationships
+    project = relationship("Project", back_populates="project_skills")
+    skill = relationship("Skill", back_populates="project_skills") 
+
+    from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+from datetime import datetime
+from src.config.base import Base
+
+# Pydantic Models
+class CourseCreate(BaseModel):
+    semester_id: Optional[int] = None
+    crn: str
+    displayName: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CourseResponse(BaseModel):
+    id: Optional[int] = None
+    semester_id: Optional[int] = None
+    crn: str
+    displayName: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+# SQLAlchemy Model
+class Course(Base):
+    __tablename__ = "courses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    semester_id = Column(Integer, ForeignKey("semesters.id", ondelete="SET NULL"), nullable=True, index=True)
+    crn = Column(String(100), nullable=False, unique=True)
+    displayName = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    semester = relationship("Semester", back_populates="courses")
+    projects = relationship("Project", back_populates="course")
+    user_courses = relationship("UserCourse", back_populates="course") 
